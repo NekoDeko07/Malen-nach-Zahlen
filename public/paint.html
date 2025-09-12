@@ -1,0 +1,21 @@
+<script>
+const params = new URLSearchParams(location.search);
+const id = params.get("id");
+if(!id){document.body.innerHTML="<p>Kein ID-Parameter!</p>";throw 0;}
+fetch("/api/load/"+id)
+  .then(r=>r.json())
+  .then(data=>{
+     const out=document.getElementById("out");
+     const ctx=out.getContext("2d");
+     out.width=data.width; out.height=data.height;
+     ctx.textAlign="center"; ctx.textBaseline="middle";
+     for(const cell of data.grid){
+       const col=data.palette[cell.idx];
+       ctx.fillStyle=`rgb(${col[0]},${col[1]},${col[2]})`;
+       ctx.fillRect(cell.x,cell.y,cell.w,cell.h);
+       ctx.fillStyle="rgba(0,0,0,.5)";
+       ctx.fillText(cell.idx+1,cell.x+cell.w/2,cell.y+cell.h/2);
+     }
+  })
+  .catch(()=>document.body.innerHTML="<p>Daten nicht gefunden.</p>");
+</script>

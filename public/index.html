@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Eigenes Malen-nach-Zahlen — Auto-Farbanzahl</title>
+<style>
+  :root{--bg:#0f1724;--panel:#0b1220;--accent:#60a5fa;--muted:#94a3b8}
+  body{background:linear-gradient(180deg,var(--bg),#071028);color:#e6eef8;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;margin:0;padding:20px}
+  .wrap{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:320px 1fr;gap:18px}
+  .panel{background:var(--panel);padding:14px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,.6)}
+  h1{font-size:18px;margin:0 0 8px}
+  label{display:block;font-size:13px;color:var(--muted);margin-top:10px}
+  input[type=file]{color:transparent}
+  .controls{display:flex;flex-direction:column}
+  .row{display:flex;gap:8px;margin-top:8px}
+  input[type=number]{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,.06);background:transparent;color:inherit}
+  button{background:var(--accent);border:none;padding:8px 10px;border-radius:8px;color:#063248;font-weight:600;cursor:pointer}
+  canvas{background:#fff;border-radius:8px;display:block;max-width:100%;height:auto}
+  .legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .sw{width:44px;height:44px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#022}
+  .note{font-size:13px;color:var(--muted);margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel">
+    <h1>Eigenes Malen-nach-Zahlen (auto)</h1>
+    <div class="controls">
+      <label>Bild auswählen</label>
+      <input id="file" type="file" accept="image/*">
+
+<div class="row">
+  <button id="share">Teilbaren Link erstellen</button>
+</div>
+
+      <label>Raster-Zellengröße (px)</label>
+      <input id="cell" type="number" min="4" max="200" value="24">
+
+      <label>Sample-Rate (1 = alle Pixel, 4 = je 4. Pixel)</label>
+      <input id="sample" type="number" min="1" max="16" value="4">
+
+      <label>K-Means Iterationen</label>
+      <input id="iter" type="number" min="1" max="40" value="8">
+
+      <div class="row">
+        <button id="gen">Generiere Mal-nach-Zahlen</button>
+        <button id="export">PNG exportieren</button>
+      </div>
+
+      <div class="note">Farbanzahl wird automatisch aus dem Bild berechnet (ca. 6 – 20). Hintergrund ist immer weiß, damit Zahlen klar bleiben.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start">
+      <div>
+        <h1 style="font-size:15px">Original</h1>
+        <canvas id="orig" width="512" height="384"></canvas>
+      </div>
+      <div>
+        <h1 style="font-size:15px">Malen-nach-Zahlen</h1>
+        <canvas id="out" width="512" height="384"></canvas>
+      </div>
+    </div>
+
+    <div id="legendWrap">
+      <h1 style="font-size:15px;margin-top:12px">Legende</h1>
+      <div id="legend" class="legend"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const file = document.getElementById('file');
+const orig = document.getElementById('orig');
+const out  = document.getElementById('out');
+const ctxO = orig.getContext('2d');
+const ctx  = out.getContext('2d');
+const cellIn = document.getElementById('cell');
+const sampleIn = document.getElementById('sample');
+const iterIn = document.getElementById('iter');
+const genBtn = document.getElementById('gen');
+const exportBtn = document.getElementById('export');
+const legendEl = document.getElementById('legend');
+
+let hidden = document.createElement('canvas');
+let hctx = hidden.getContext('2d');
+let palette=[], grid=[], imgRatio=1;
+
+file.addEventListener('change', e=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  const url = URL.createObjectURL(f);
+  const img = new Image();
+  img.onload = ()=>{
+    const scale = Math.min(512/img.width,384/img.height,1);
+    const w = img.width*scale, h = img.height*scale;
+    orig.width=w; orig.height=h; out.width=w; out.height=h;
+    hidden.width=img.width; hidden.height=img.height;
+    imgRatio = img.width/w;
+    ctxO.drawImage(img,0,0,w,h);
+    hctx.drawImage(img,0,0,img.width,img.height);
+  };
+  img.src=url;
+});
+
+function samplePixels(rate){
+  const d = hctx.getImageData(0,0,hidden.width,hidden.height).data;
+  const pts=[];
+  for(let y=0;y<hidden.height;y+=rate){
+    for(let x=0;x<hidden.width;x+=rate){
+      const i=(y*hidden.width+x)*4;
+      pts.push([d[i],d[i+1],d[i+2]]);
+    }
+  }
+  return pts;
+}
+
+function sq(a,b){return (a[0]-b[0])**2+(a[1]-b[1])**2+(a[2]-b[2])**2;}
+function nearest(c,p){let best=0,b=1e9;for(let i=0;i<p.length;i++){const d=sq(c,p[i]);if(d<b){b=d;best=i;}}return best;}
+function rgbhex(c){return '#'+c.map(v=>v.toString(16).padStart(2,'0')).join('');}
+
+function kmeans(points,k,iter){
+  const centroids = [];
+  for(let i=0;i<k;i++) centroids.push(points[Math.floor(Math.random()*points.length)].slice());
+  for(let t=0;t<iter;t++){
+    const sum=Array(k).fill(0).map(_=>[0,0,0,0]);
+    for(const p of points){
+      let best=0,b=1e9;
+      for(let i=0;i<k;i++){const d=sq(p,centroids[i]);if(d<b){b=d;best=i;}}
+      sum[best][0]+=p[0];sum[best][1]+=p[1];sum[best][2]+=p[2];sum[best][3]++;
+    }
+    for(let i=0;i<k;i++) if(sum[i][3]>0)
+      for(let j=0;j<3;j++) centroids[i][j]=Math.round(sum[i][j]/sum[i][3]);
+  }
+  return centroids;
+}
+
+function estimateK(points){
+  // einfache Heuristik: je größer Varianz, desto mehr Farben
+  let mean=[0,0,0];
+  for(const p of points){mean[0]+=p[0];mean[1]+=p[1];mean[2]+=p[2];}
+  mean=mean.map(v=>v/points.length);
+  let varSum=0;
+  for(const p of points) varSum += Math.sqrt(sq(p,mean));
+  const v = varSum/points.length;
+  return Math.max(6,Math.min(20,Math.round(v/30)));
+}
+
+function generate(){
+  if(!hidden.width) return alert('Bitte erst ein Bild hochladen.');
+  const rate = Math.max(1,parseInt(sampleIn.value));
+  const iter = Math.max(1,parseInt(iterIn.value));
+  const pts = samplePixels(rate);
+  const k = estimateK(pts);
+  palette = kmeans(pts,k,iter);
+
+  const cell = Math.max(2,parseInt(cellIn.value));
+  grid=[];
+  for(let y=0;y<out.height;y+=cell){
+    for(let x=0;x<out.width;x+=cell){
+      const sx = Math.floor(x*imgRatio), sy=Math.floor(y*imgRatio);
+      const sw = Math.max(1,Math.round(cell*imgRatio));
+      const sh = Math.max(1,Math.round(cell*imgRatio));
+      const d = hctx.getImageData(sx,sy,sw,sh).data;
+      let r=0,g=0,b=0,c=0;
+      for(let i=0;i<d.length;i+=4){r+=d[i];g+=d[i+1];b+=d[i+2];c++;}
+      r/=c;g/=c;b/=c;
+      const idx = nearest([r,g,b],palette);
+      grid.push({x,y,w:Math.min(cell,out.width-x),h:Math.min(cell,out.height-y),idx});
+    }
+  }
+  render();
+  renderLegend();
+}
+
+function render(){
+  ctx.fillStyle='#ffffff';
+  ctx.fillRect(0,0,out.width,out.height);
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(const g of grid){
+    const fs = Math.max(10,Math.min(g.w,g.h)*0.5);
+    ctx.font = fs+'px sans-serif';
+    ctx.fillStyle='#222';
+    ctx.fillText(String(g.idx+1), g.x+g.w/2, g.y+g.h/2);
+  }
+}
+
+function renderLegend(){
+  legendEl.innerHTML='';
+  palette.forEach((c,i)=>{
+    const div=document.createElement('div');
+    div.className='sw';
+    div.style.background=rgbhex(c);
+    div.textContent=i+1;
+    legendEl.appendChild(div);
+  });
+}
+
+genBtn.addEventListener('click',generate);
+exportBtn.addEventListener('click',()=>{
+  const a=document.createElement('a');
+  a.href=out.toDataURL('image/png');
+  a.download='paint_by_numbers.png';
+  a.click();
+});
+
+// ---- Link zum Teilen ----
+async function shareLink(){
+  if(!grid.length || !palette.length){
+    alert("Bitte zuerst ein Bild generieren.");
+    return;
+  }
+  const payload = {
+    palette,
+    grid: grid.map(c => ({x:c.x,y:c.y,w:c.w,h:c.h,idx:c.idx})),
+    width: out.width,
+    height: out.height
+  };
+  try{
+    const res = await fetch("/api/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const { id } = await res.json();
+    const link = `${location.origin}/paint.html?id=${id}`;
+    await navigator.clipboard.writeText(link);
+    alert("Link kopiert:\n" + link);
+  }catch(err){
+    alert("Fehler beim Speichern: " + err);
+  }
+}
+document.getElementById("share").addEventListener("click", shareLink);
+
+</script>
+</body>
+</html>
