@@ -4,47 +4,77 @@
 <meta charset="utf-8">
 <title>Malen nach Zahlen – Ausfüllen</title>
 <style>
-  body{background:#0f1724;color:#e6eef8;font-family:sans-serif;margin:0;padding:20px}
-  canvas{background:#fff;display:block;margin:auto;border-radius:8px}
-  .legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px;justify-content:center}
-  .sw{width:44px;height:44px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#022}
+  body{background:#0f1724;color:#e6eef8;font-family:sans-serif;margin:0;padding:20px;text-align:center}
+  canvas{background:#fff;display:block;margin:20px auto;border-radius:8px;cursor:crosshair}
+  .legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;justify-content:center}
+  .sw{width:44px;height:44px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+      font-weight:700;color:#022;border:3px solid transparent;cursor:pointer}
+  .sw.sel{border-color:#fff;}
 </style>
 </head>
 <body>
 <h1>Malen nach Zahlen</h1>
 <canvas id="paint"></canvas>
 <div id="legend" class="legend"></div>
+
 <script>
 const id = new URLSearchParams(location.search).get("id");
 const cvs = document.getElementById("paint");
 const ctx = cvs.getContext("2d");
 const legend = document.getElementById("legend");
 
+let grid=[], palette=[], selected=-1;
+
+// Hilfsfunktionen
+const rgb = c => `rgb(${c.join(",")})`;
+function drawNumbers(){
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  for(const g of grid){
+    const fs = Math.max(10,Math.min(g.w,g.h)*0.5);
+    ctx.font = fs+"px sans-serif";
+    ctx.fillStyle="#222";
+    ctx.fillText(String(g.idx+1), g.x+g.w/2, g.y+g.h/2);
+  }
+}
+
+// Daten laden
 fetch("/api/load/"+id)
   .then(r=>r.json())
   .then(data=>{
-    const {palette,grid,width,height} = data;
-    cvs.width = width;
-    cvs.height = height;
+    ({palette,grid} = data);
+    cvs.width = data.width;
+    cvs.height = data.height;
     ctx.fillStyle="#fff";
-    ctx.fillRect(0,0,width,height);
-    ctx.textAlign="center";
-    ctx.textBaseline="middle";
-    for(const g of grid){
-      const fs = Math.max(10,Math.min(g.w,g.h)*0.5);
-      ctx.font = fs+"px sans-serif";
-      ctx.fillStyle="#222";
-      ctx.fillText(String(g.idx+1), g.x+g.w/2, g.y+g.h/2);
-    }
+    ctx.fillRect(0,0,cvs.width,cvs.height);
+    drawNumbers();
+
+    // Palette rendern
     palette.forEach((c,i)=>{
-      const div=document.createElement("div");
-      div.className="sw";
-      div.style.background=`rgb(${c.join(",")})`;
-      div.textContent=i+1;
-      legend.appendChild(div);
+      const sw=document.createElement("div");
+      sw.className="sw";
+      sw.style.background=rgb(c);
+      sw.textContent=i+1;
+      sw.onclick=()=>{
+        selected=i;
+        document.querySelectorAll(".sw").forEach(e=>e.classList.toggle("sel", e===sw));
+      };
+      legend.appendChild(sw);
     });
   })
   .catch(()=>alert("Bild nicht gefunden."));
+
+// Klick zum Ausmalen
+cvs.addEventListener("click", e=>{
+  if(selected<0) return alert("Bitte erst eine Farbe wählen!");
+  const rect=cvs.getBoundingClientRect();
+  const x=e.clientX-rect.left, y=e.clientY-rect.top;
+  const cell=grid.find(c=>x>=c.x && x<c.x+c.w && y>=c.y && y<c.y+c.h);
+  if(cell && cell.idx===selected){
+    ctx.fillStyle = rgb(palette[selected]);
+    ctx.fillRect(cell.x, cell.y, cell.w, cell.h);
+    drawNumbers(); // Zahlen oben drauf
+  }
+});
 </script>
 </body>
 </html>
