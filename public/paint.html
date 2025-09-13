@@ -1,21 +1,50 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Malen nach Zahlen – Ausfüllen</title>
+<style>
+  body{background:#0f1724;color:#e6eef8;font-family:sans-serif;margin:0;padding:20px}
+  canvas{background:#fff;display:block;margin:auto;border-radius:8px}
+  .legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px;justify-content:center}
+  .sw{width:44px;height:44px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#022}
+</style>
+</head>
+<body>
+<h1>Malen nach Zahlen</h1>
+<canvas id="paint"></canvas>
+<div id="legend" class="legend"></div>
 <script>
-const params = new URLSearchParams(location.search);
-const id = params.get("id");
-if(!id){document.body.innerHTML="<p>Kein ID-Parameter!</p>";throw 0;}
+const id = new URLSearchParams(location.search).get("id");
+const cvs = document.getElementById("paint");
+const ctx = cvs.getContext("2d");
+const legend = document.getElementById("legend");
+
 fetch("/api/load/"+id)
   .then(r=>r.json())
   .then(data=>{
-     const out=document.getElementById("out");
-     const ctx=out.getContext("2d");
-     out.width=data.width; out.height=data.height;
-     ctx.textAlign="center"; ctx.textBaseline="middle";
-     for(const cell of data.grid){
-       const col=data.palette[cell.idx];
-       ctx.fillStyle=`rgb(${col[0]},${col[1]},${col[2]})`;
-       ctx.fillRect(cell.x,cell.y,cell.w,cell.h);
-       ctx.fillStyle="rgba(0,0,0,.5)";
-       ctx.fillText(cell.idx+1,cell.x+cell.w/2,cell.y+cell.h/2);
-     }
+    const {palette,grid,width,height} = data;
+    cvs.width = width;
+    cvs.height = height;
+    ctx.fillStyle="#fff";
+    ctx.fillRect(0,0,width,height);
+    ctx.textAlign="center";
+    ctx.textBaseline="middle";
+    for(const g of grid){
+      const fs = Math.max(10,Math.min(g.w,g.h)*0.5);
+      ctx.font = fs+"px sans-serif";
+      ctx.fillStyle="#222";
+      ctx.fillText(String(g.idx+1), g.x+g.w/2, g.y+g.h/2);
+    }
+    palette.forEach((c,i)=>{
+      const div=document.createElement("div");
+      div.className="sw";
+      div.style.background=`rgb(${c.join(",")})`;
+      div.textContent=i+1;
+      legend.appendChild(div);
+    });
   })
-  .catch(()=>document.body.innerHTML="<p>Daten nicht gefunden.</p>");
+  .catch(()=>alert("Bild nicht gefunden."));
 </script>
+</body>
+</html>
