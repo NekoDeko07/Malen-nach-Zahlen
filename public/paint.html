@@ -30,10 +30,12 @@ const rgb = c => `rgb(${c.join(",")})`;
 function drawNumbers(){
   ctx.textAlign="center"; ctx.textBaseline="middle";
   for(const g of grid){
-    const fs = Math.max(10,Math.min(g.w,g.h)*0.5);
-    ctx.font = fs+"px sans-serif";
-    ctx.fillStyle="#222";
-    ctx.fillText(String(g.idx+1), g.x+g.w/2, g.y+g.h/2);
+    if(!g.filled){  // nur ungelöste Felder
+      const fs = Math.max(10,Math.min(g.w,g.h)*0.5);
+      ctx.font = fs+"px sans-serif";
+      ctx.fillStyle="#222";
+      ctx.fillText(String(g.idx+1), g.x+g.w/2, g.y+g.h/2);
+    }
   }
 }
 
@@ -42,6 +44,8 @@ fetch("/api/load/"+id)
   .then(r=>r.json())
   .then(data=>{
     ({palette,grid} = data);
+    // Flag für jeden Bereich
+    grid.forEach(g=>g.filled=false);
     cvs.width = data.width;
     cvs.height = data.height;
     ctx.fillStyle="#fff";
@@ -69,10 +73,12 @@ cvs.addEventListener("click", e=>{
   const rect=cvs.getBoundingClientRect();
   const x=e.clientX-rect.left, y=e.clientY-rect.top;
   const cell=grid.find(c=>x>=c.x && x<c.x+c.w && y>=c.y && y<c.y+c.h);
-  if(cell && cell.idx===selected){
+  if(cell && !cell.filled && cell.idx===selected){
+    // Zelle füllen und als "fertig" markieren
     ctx.fillStyle = rgb(palette[selected]);
     ctx.fillRect(cell.x, cell.y, cell.w, cell.h);
-    drawNumbers(); // Zahlen oben drauf
+    cell.filled = true;
+    // Zahl in dieser Zelle NICHT neu zeichnen -> bleibt weg
   }
 });
 </script>
