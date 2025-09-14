@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Eigenes Malen-nach-Zahlen — Auto-Farbanzahl</title>
+<title>Eigenes Malen-nach-Zahlen — 20 Farben</title>
 <style>
   :root{--bg:#0f1724;--panel:#0b1220;--accent:#60a5fa;--muted:#94a3b8}
   body{background:linear-gradient(180deg,var(--bg),#071028);color:#e6eef8;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;margin:0;padding:20px}
@@ -19,36 +19,27 @@
   canvas{background:#fff;border-radius:8px;display:block;max-width:100%;height:auto}
   .legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
   .sw{width:44px;height:44px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#022}
-  .note{font-size:13px;color:var(--muted);margin-top:10px}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="panel">
-    <h1>Eigenes Malen-nach-Zahlen (auto)</h1>
+    <h1>Eigenes Malen-nach-Zahlen</h1>
     <div class="controls">
       <label>Bild auswählen</label>
       <input id="file" type="file" accept="image/*">
 
-<div class="row">
-  <button id="share">Teilbaren Link erstellen</button>
-</div>
+      <div class="row">
+        <button id="share">Teilbaren Link erstellen</button>
+      </div>
 
       <label>Raster-Zellengröße (px)</label>
       <input id="cell" type="number" min="4" max="200" value="24">
-
-      <label>Sample-Rate (1 = alle Pixel, 4 = je 4. Pixel)</label>
-      <input id="sample" type="number" min="1" max="16" value="4">
-
-      <label>K-Means Iterationen</label>
-      <input id="iter" type="number" min="1" max="40" value="8">
 
       <div class="row">
         <button id="gen">Generiere Mal-nach-Zahlen</button>
         <button id="export">PNG exportieren</button>
       </div>
-
-      <div class="note">Farbanzahl wird automatisch aus dem Bild berechnet (ca. 6 – 20). Hintergrund ist immer weiß, damit Zahlen klar bleiben.</div>
     </div>
   </div>
 
@@ -78,11 +69,13 @@ const out  = document.getElementById('out');
 const ctxO = orig.getContext('2d');
 const ctx  = out.getContext('2d');
 const cellIn = document.getElementById('cell');
-const sampleIn = document.getElementById('sample');
-const iterIn = document.getElementById('iter');
 const genBtn = document.getElementById('gen');
 const exportBtn = document.getElementById('export');
 const legendEl = document.getElementById('legend');
+
+const sampleRate = 4;   // fest
+const kMeansIter = 12;  // fest
+const colorCount = 20;  // fest
 
 let hidden = document.createElement('canvas');
 let hctx = hidden.getContext('2d');
@@ -137,24 +130,10 @@ function kmeans(points,k,iter){
   return centroids;
 }
 
-function estimateK(points){
-  // einfache Heuristik: je größer Varianz, desto mehr Farben
-  let mean=[0,0,0];
-  for(const p of points){mean[0]+=p[0];mean[1]+=p[1];mean[2]+=p[2];}
-  mean=mean.map(v=>v/points.length);
-  let varSum=0;
-  for(const p of points) varSum += Math.sqrt(sq(p,mean));
-  const v = varSum/points.length;
-  return Math.max(6,Math.min(20,Math.round(v/30)));
-}
-
 function generate(){
   if(!hidden.width) return alert('Bitte erst ein Bild hochladen.');
-  const rate = Math.max(1,parseInt(sampleIn.value));
-  const iter = Math.max(1,parseInt(iterIn.value));
-  const pts = samplePixels(rate);
-  const k = estimateK(pts);
-  palette = kmeans(pts,k,iter);
+  const pts = samplePixels(sampleRate);
+  palette = kmeans(pts,colorCount,kMeansIter);
 
   const cell = Math.max(2,parseInt(cellIn.value));
   grid=[];
@@ -233,7 +212,6 @@ async function shareLink(){
   }
 }
 document.getElementById("share").addEventListener("click", shareLink);
-
 </script>
 </body>
 </html>
