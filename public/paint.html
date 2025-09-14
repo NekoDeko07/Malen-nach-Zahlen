@@ -10,6 +10,13 @@
   .sw{width:44px;height:44px;border-radius:8px;display:flex;align-items:center;justify-content:center;
       font-weight:700;color:#022;border:3px solid transparent;cursor:pointer}
   .sw.sel{border-color:#fff;}
+  .cell {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:2px;         /* zusätzlicher Innenabstand */
+  overflow:hidden;     /* falls Zahlen größer werden */
+}
 </style>
 </head>
 <body>
@@ -32,9 +39,10 @@ function drawNumbers(){
   for(const g of grid){
     if(!g.filled){  // nur ungelöste Felder
       const fs = Math.max(10,Math.min(g.w,g.h)*0.5);
-      ctx.font = fs+"px sans-serif";
+      ctx.font = ctx.font = `${tileSize * 0.5}px Arial`;
       ctx.fillStyle="#222";
-      ctx.fillText(String(g.idx+1), g.x+g.w/2, g.y+g.h/2);
+      const padding = tileSize * 0.1; // z.B. 10 % Rand
+      ctx.fillText(num, x + tileSize / 2, y + tileSize / 2 + padding);
     }
   }
 }

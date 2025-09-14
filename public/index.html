@@ -19,6 +19,13 @@
   canvas{background:#fff;border-radius:8px;display:block;max-width:100%;height:auto}
   .legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
   .sw{width:44px;height:44px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#022}
+  .cell {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:2px;         /* zusätzlicher Innenabstand */
+  overflow:hidden;     /* falls Zahlen größer werden */
+}
 </style>
 </head>
 <body>
@@ -155,33 +162,45 @@ function generate(){
 }
 
 function render(){
-  ctx.fillStyle='#ffffff';
-  ctx.fillRect(0,0,out.width,out.height);
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  for(const g of grid){
-    const fs = Math.max(10,Math.min(g.w,g.h)*0.5);
-    ctx.font = fs+'px sans-serif';
-    ctx.fillStyle='#222';
-    ctx.fillText(String(g.idx+1), g.x+g.w/2, g.y+g.h/2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, out.width, out.height);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  for (const g of grid) {
+    // Schriftgröße dynamisch anpassen
+    const fs = Math.max(10, Math.min(g.w, g.h) * 0.5);
+    ctx.font = `${fs}px Arial`;
+    ctx.fillStyle = '#222';
+
+    // kleine Einrückung, damit Zahlen nicht am Rand kleben
+    const padding = Math.min(g.w, g.h) * 0.05;
+
+    // Zahl in die Mitte der Zelle setzen
+    ctx.fillText(
+      g.idx + 1,
+      g.x + g.w / 2,
+      g.y + g.h / 2 + padding
+    );
   }
 }
 
 function renderLegend(){
-  legendEl.innerHTML='';
+  legendEl.innerHTML = '';
   palette.forEach((c,i)=>{
-    const div=document.createElement('div');
-    div.className='sw';
-    div.style.background=rgbhex(c);
-    div.textContent=i+1;
+    const div = document.createElement('div');
+    div.className = 'sw';
+    div.style.background = rgbhex(c);
+    div.textContent = i + 1;
     legendEl.appendChild(div);
   });
 }
 
-genBtn.addEventListener('click',generate);
-exportBtn.addEventListener('click',()=>{
-  const a=document.createElement('a');
-  a.href=out.toDataURL('image/png');
-  a.download='paint_by_numbers.png';
+genBtn.addEventListener('click', generate);
+exportBtn.addEventListener('click', () => {
+  const a = document.createElement('a');
+  a.href = out.toDataURL('image/png');
+  a.download = 'paint_by_numbers.png';
   a.click();
 });
 
